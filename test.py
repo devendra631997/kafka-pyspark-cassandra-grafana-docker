@@ -12,6 +12,8 @@ records = db.my_collection.find()
 for record in records:
     print(record)
 
+# db.my_collection.delete_many({})
+
 
 
 # import pyspark

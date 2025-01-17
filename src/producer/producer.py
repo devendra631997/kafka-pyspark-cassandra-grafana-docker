@@ -14,10 +14,11 @@ topic_name = os.environ.get('INPUT_TOPIC')
 # Define possible interaction types and items
 interaction_types = ['click', 'view', 'purchase']
 item_ids = range(1, 1001)  # Simulating 1000 unique items
+user_ids = range(1000, 999999)  # Simulating 1000 unique items
 
 # Generate random interaction data
 def generate_interaction():
-    user_id = str(uuid.uuid4())  # Unique user ID
+    user_id = random.choice(user_ids)  # Unique user ID
     item_id = random.choice(item_ids)  # Random item
     interaction_type = random.choice(interaction_types)  # Random interaction type
     timestamp = datetime.now().isoformat()  # Current UTC time in ISO format
