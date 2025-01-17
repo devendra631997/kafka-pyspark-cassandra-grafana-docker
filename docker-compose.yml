@@ -33,7 +33,7 @@ services:
       - broker
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=broker:29092
-      - INPUT_TOPIC=test_topic
+      - INPUT_TOPIC=interaction
 
   pyspark_consumer:
     build:
@@ -45,7 +45,7 @@ services:
       - producer
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=broker:29092
-      - INPUT_TOPIC=test_topic
+      - INPUT_TOPIC=interaction
 
   mongo:
       image: mongo:latest
