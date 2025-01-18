@@ -17,53 +17,72 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Define schema for incoming messages
-schema = StructType().add("interaction_type", StringType()) \
-                     .add("timestamp", TimestampType()) \
-                     .add("user_id", DoubleType()) \
-                     .add("item_id", DoubleType())
+schema = (StructType()
+          .add("interaction_type", StringType())
+          .add("timestamp", TimestampType())
+          .add("user_id", DoubleType())
+          .add("item_id", DoubleType()))
+
 
 # Function to initialize Spark session
 def create_spark_session() -> SparkSession:
     """Initialize and return a Spark session."""
-    spark = SparkSession.builder \
-        .appName("streaming_interaction") \
-        .config('spark.jars.packages', 
-                'org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.0,' 
-                'com.datastax.spark:spark-cassandra-connector_2.12:3.0.0') \
-        .config('spark.sql.streaming.checkpointLocation', '/tmp/pyspark5/') \
-        .config('spark.sql.shuffle.partitions', 8) \
-        .config("spark.cassandra.connection.host", "cassandra") \
-        .config("spark.cassandra.connection.port", "9042") \
-        .getOrCreate()
-    
+    spark = (SparkSession.builder.appName("streaming_interaction")
+             .config('spark.jars.packages',
+                'org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.0,'
+                'com.datastax.spark:spark-cassandra-connector_2.12:3.0.0')
+             .config('spark.sql.streaming.checkpointLocation', '/tmp/pyspark5/')
+             .config('spark.sql.shuffle.partitions', 8)
+             .config("spark.cassandra.connection.host", CASSANDRA_HOST)
+             .config("spark.cassandra.connection.port", "9042")
+             .getOrCreate())
+
     spark.sparkContext.setLogLevel("INFO")
     return spark
+
 
 # Function to read data from Kafka
 def read_from_kafka(spark: SparkSession):
     """Read streaming data from Kafka."""
-    df = spark.readStream \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS_CONS) \
-        .option("subscribe", KAFKA_TOPIC_NAME_CONS) \
-        .option("startingOffsets", "latest") \
-        .option("failOnDataLoss", "false") \
-        .load()
-    
+    df = (spark.readStream.format("kafka")
+          .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS_CONS)
+          .option("subscribe", KAFKA_TOPIC_NAME_CONS)
+          .option("startingOffsets", "latest")
+          .option("failOnDataLoss", "false")
+          .load())
+
     logger.info(f"Started reading from Kafka topic: {KAFKA_TOPIC_NAME_CONS}")
     return df
+
 
 # Function to parse raw Kafka messages
 def parse_kafka_messages(df, schema):
     """Parse raw Kafka messages into structured format."""
-    raw_messages = df.selectExpr("CAST(value AS STRING)", "timestamp")
-    messages = raw_messages \
-        .select(from_json(col("value"), schema).alias("value_columns"), "timestamp") \
-        .select("value_columns.*",)
-    
+    raw_messages = df.selectExpr("CAST(value AS STRING)")
+    messages = (raw_messages
+                .select(from_json(col("value"), schema).alias("value_columns"))
+                .select("value_columns.*"))
+
     logger.info("Parsed messages schema:")
     messages.printSchema()
     return messages
+
+def aggregate_user_interactions(df):
+    """Aggregates total interactions per user."""
+    return df.groupBy("user_id") \
+             .count() \
+             .withColumnRenamed("count", "total_interactions") \
+             .withColumn("average_interactions", col("total_interactions") / 1)  # Adjust as necessary for your logic
+
+def aggregate_item_interactions(df):
+    """Aggregates max, min, and total interactions per item."""
+    return df.groupBy("item_id") \
+             .agg(
+                 expr("max(total_interactions)").alias("max_interactions"),
+                 expr("min(total_interactions)").alias("min_interactions"),
+                 expr("sum(total_interactions)").alias("total_interactions")
+             )
+
 
 # Function to write data to Cassandra
 def write_to_cassandra(df):
