@@ -15,6 +15,11 @@ ENV JAVA_HOME=/usr/lib/jvm/default-java
 # ENV OUTPUT_TOPIC='output_topic_sink'
 # ENV KAFKA_BOOTSTRAP_SERVERS='broker:29092'
 
-COPY pyspark_consumer.py .
+# COPY pyspark_consumer.py .
 
-CMD ["python", "pyspark_consumer.py"]
+# CMD ["python", "pyspark_consumer.py"]
+
+
+COPY casandra.py .
+
+CMD ["python", "casandra.py"]

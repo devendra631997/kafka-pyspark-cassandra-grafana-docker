@@ -43,26 +43,59 @@ services:
     depends_on:
       - broker
       - producer
+      - cassandra
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=broker:29092
       - INPUT_TOPIC=interaction
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=adminpassword
+      - CASSANDRA_HOST=cassandra  # Use service name 'cassandra' here
+      - CASSANDRA_KEYSPACE=interaction_data
+      - CASSANDRA_TABLE=interaction_data
+
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra
+    ports:
+      - "9042:9042"  # CQL (Cassandra Query Language) port
+    environment:
+      - CASSANDRA_CLUSTER_NAME=CassandraCluster
+      - CASSANDRA_DC=DC1
+      - CASSANDRA_RACK=RAC1
+      - CASSANDRA_LISTEN_ADDRESS=cassandra
+      - CASSANDRA_LISTENER_TRANSPORT_PORT=7000
+      - CASSANDRA_CQL_PORT=9042
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+      - ./cassandra/init:/docker-entrypoint-initdb.d  # Mount the init directory
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - cassandra
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    restart: always
 
   mongo:
-      image: mongo:latest
-      container_name: mongo
-      ports:
-        - "27017:27017"
-      volumes:
-        - mongo_data:/data/db
-      environment:
-        MONGO_INITDB_ROOT_USERNAME: admin
-        MONGO_INITDB_ROOT_PASSWORD: adminpassword
-      restart: always
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpassword
+    restart: always
 
 volumes:
   mongo_data:
+  cassandra_data:
 
 networks:
   kafka-network:

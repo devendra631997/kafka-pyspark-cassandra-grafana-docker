@@ -1,0 +1,105 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StringType, DoubleType, TimestampType
+import os
+import logging
+
+# Environment variables
+KAFKA_TOPIC_NAME_CONS = os.environ.get('INPUT_TOPIC')
+KAFKA_OUTPUT_TOPIC_NAME_CONS = os.environ.get('OUTPUT_TOPIC')
+KAFKA_BOOTSTRAP_SERVERS_CONS = os.environ.get('KAFKA_BOOTSTRAP_SERVERS')
+CASSANDRA_HOST = os.environ.get('CASSANDRA_HOST', 'cassandra')  # Default to "cassandra" host
+CASSANDRA_KEYSPACE = os.environ.get('CASSANDRA_KEYSPACE', 'interaction_data')
+CASSANDRA_TABLE = os.environ.get('CASSANDRA_TABLE', 'interaction_data')
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Define schema for incoming messages
+schema = StructType().add("interaction_type", StringType()) \
+                     .add("timestamp", TimestampType()) \
+                     .add("user_id", DoubleType()) \
+                     .add("item_id", DoubleType())
+
+# Function to initialize Spark session
+def create_spark_session() -> SparkSession:
+    """Initialize and return a Spark session."""
+    spark = SparkSession.builder \
+        .appName("streaming_interaction") \
+        .config('spark.jars.packages', 
+                'org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.0,' 
+                'com.datastax.spark:spark-cassandra-connector_2.12:3.0.0') \
+        .config('spark.sql.streaming.checkpointLocation', '/tmp/pyspark5/') \
+        .config('spark.sql.shuffle.partitions', 8) \
+        .config("spark.cassandra.connection.host", "cassandra") \
+        .config("spark.cassandra.connection.port", "9042") \
+        .getOrCreate()
+    
+    spark.sparkContext.setLogLevel("INFO")
+    return spark
+
+# Function to read data from Kafka
+def read_from_kafka(spark: SparkSession):
+    """Read streaming data from Kafka."""
+    df = spark.readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS_CONS) \
+        .option("subscribe", KAFKA_TOPIC_NAME_CONS) \
+        .option("startingOffsets", "latest") \
+        .option("failOnDataLoss", "false") \
+        .load()
+    
+    logger.info(f"Started reading from Kafka topic: {KAFKA_TOPIC_NAME_CONS}")
+    return df
+
+# Function to parse raw Kafka messages
+def parse_kafka_messages(df, schema):
+    """Parse raw Kafka messages into structured format."""
+    raw_messages = df.selectExpr("CAST(value AS STRING)", "timestamp")
+    messages = raw_messages \
+        .select(from_json(col("value"), schema).alias("value_columns"), "timestamp") \
+        .select("value_columns.*",)
+    
+    logger.info("Parsed messages schema:")
+    messages.printSchema()
+    return messages
+
+# Function to write data to Cassandra
+def write_to_cassandra(df):
+    """Write processed data to Cassandra."""
+    # Log the keyspace and table to check their values
+    logger.info(f"Writing to Cassandra: Keyspace={CASSANDRA_KEYSPACE}, Table={CASSANDRA_TABLE}")
+    
+    # Ensure that the keyspace and table are passed explicitly in the options
+    query = df.writeStream \
+        .format("org.apache.spark.sql.cassandra") \
+        .option("keyspace", CASSANDRA_KEYSPACE) \
+        .option("table", CASSANDRA_TABLE) \
+        .outputMode("append") \
+        .start()
+
+    logger.info("Writing stream to Cassandra...")
+    return query
+
+# Main function to orchestrate the process
+def main():
+    """Main function to run the streaming job."""
+    spark = create_spark_session()  # Step 1: Create Spark session
+    df = read_from_kafka(spark)  # Step 2: Read from Kafka
+    messages = parse_kafka_messages(df, schema)  # Step 3: Parse messages
+    query = write_to_cassandra(messages)  # Step 4: Write to Cassandra
+    
+    # Handle graceful shutdown and errors
+    try:
+        logger.info("Starting query processing...")
+        query.awaitTermination()
+    except KeyboardInterrupt:
+        logger.info("Streaming job interrupted.")
+        query.stop()
+    except Exception as e:
+        logger.error(f"Error in streaming job: {e}")
+        query.stop()
+
+if __name__ == "__main__":
+    main()
