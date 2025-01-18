@@ -13,8 +13,8 @@ topic_name = os.environ.get('INPUT_TOPIC')
 
 # Define possible interaction types and items
 interaction_types = ['click', 'view', 'purchase']
-item_ids = range(1, 1001)  # Simulating 1000 unique items
-user_ids = range(1000, 999999)  # Simulating 1000 unique items
+item_ids = range(1, 10)  # Simulating 1000 unique items
+user_ids = range(11100, 11199)  # Simulating 1000 unique items
 
 # Generate random interaction data
 def generate_interaction():
@@ -50,9 +50,9 @@ def main():
     while True:
         sending_data = generate_interaction()
         producer.produce(topic_name, value=json.dumps(sending_data).encode('utf-8'), callback=delivery_report)
-        producer.poll(5)  # Poll for delivery reports
+        producer.poll(0.5)  # Poll for delivery reports
         logging.info('Sending interaction data...')
-        sleep(5)
+        sleep(1)
 
 if __name__ == '__main__':
     main()

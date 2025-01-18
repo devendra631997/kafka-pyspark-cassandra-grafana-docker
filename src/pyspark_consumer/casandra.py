@@ -29,8 +29,8 @@ def create_spark_session() -> SparkSession:
     """Initialize and return a Spark session."""
     spark = (SparkSession.builder.appName("streaming_interaction")
              .config('spark.jars.packages',
-                'org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.0,'
-                'com.datastax.spark:spark-cassandra-connector_2.12:3.0.0')
+                     'org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.0,'
+                     'com.datastax.spark:spark-cassandra-connector_2.12:3.0.0')
              .config('spark.sql.streaming.checkpointLocation', '/tmp/pyspark5/')
              .config('spark.sql.shuffle.partitions', 8)
              .config("spark.cassandra.connection.host", CASSANDRA_HOST)
@@ -67,21 +67,20 @@ def parse_kafka_messages(df, schema):
     messages.printSchema()
     return messages
 
+
 def aggregate_user_interactions(df):
     """Aggregates total interactions per user."""
-    return df.groupBy("user_id") \
-             .count() \
-             .withColumnRenamed("count", "total_interactions") \
-             .withColumn("average_interactions", col("total_interactions") / 1)  # Adjust as necessary for your logic
+    return (df.groupBy("user_id")
+            .count()
+            .withColumnRenamed("count", "total_interactions")
+            .withColumn("average_interactions", col("total_interactions") / 1))  # Adjust as necessary for your logic
 
 def aggregate_item_interactions(df):
     """Aggregates max, min, and total interactions per item."""
-    return df.groupBy("item_id") \
-             .agg(
-                 expr("max(total_interactions)").alias("max_interactions"),
-                 expr("min(total_interactions)").alias("min_interactions"),
-                 expr("sum(total_interactions)").alias("total_interactions")
-             )
+    return (df.groupBy("item_id")
+            .count()
+            .withColumnRenamed("count", "total_interactions")
+            .withColumn("average_interactions", col("total_interactions") / 1))
 
 
 # Function to write data to Cassandra
@@ -96,6 +95,7 @@ def write_to_cassandra(df, keyspace=CASSANDRA_KEYSPACE, table=CASSANDRA_TABLE, m
              .option("keyspace", keyspace)
              .option("table", table)
              .outputMode(mode)  # Ensure mode is either "append" or "complete"
+             .option("confirm.truncate", "true")
              .start())
 
     logger.info("Writing stream to Cassandra...")
@@ -108,27 +108,39 @@ def main():
     spark = create_spark_session()  # Step 1: Create Spark session
     df = read_from_kafka(spark)  # Step 2: Read from Kafka
     messages = parse_kafka_messages(df, schema)  # Step 3: Parse messages
-    # user_agg_df = aggregate_user_interactions(messages)
-    # user_agg_df_query = write_to_cassandra(user_agg_df, table='user_aggregates', mode='complete')
-    # user_agg_df_query.awaitTermination()
-    # # Step 4: Aggregate item interactions
-    # item_agg_df = aggregate_item_interactions(messages)
-    # item_agg_df_query = write_to_cassandra(item_agg_df, table='item_aggregates', mode='complete')
-    # item_agg_df_query.awaitTermination()
+
+    # Aggregation for user interactions
+    user_agg_df = aggregate_user_interactions(messages)
+    user_agg_df_query = write_to_cassandra(user_agg_df, table='user_aggregates', mode='complete')
+
+    # Aggregation for item interactions
+    item_agg_df = aggregate_item_interactions(messages)
+    item_agg_df_query = write_to_cassandra(item_agg_df, table='item_aggregates', mode='complete')
 
     # Write raw messages in append mode (since it's streaming data)
-    query = write_to_cassandra(messages, mode="append")
+    raw_messages_query = write_to_cassandra(messages, mode="append")
 
     # Handle graceful shutdown and errors
     try:
         logger.info("Starting query processing...")
-        query.awaitTermination()
+        # Await termination for all the queries in parallel
+        user_agg_df_query.awaitTermination()
+        item_agg_df_query.awaitTermination()
+        raw_messages_query.awaitTermination()
+
     except KeyboardInterrupt:
         logger.info("Streaming job interrupted.")
-        query.stop()
+        # Stop all queries gracefully
+        user_agg_df_query.stop()
+        item_agg_df_query.stop()
+        raw_messages_query.stop()
+
     except Exception as e:
         logger.error(f"Error in streaming job: {e}")
-        query.stop()
+        # Stop all queries in case of error
+        user_agg_df_query.stop()
+        item_agg_df_query.stop()
+        raw_messages_query.stop()
 
 
 if __name__ == "__main__":
