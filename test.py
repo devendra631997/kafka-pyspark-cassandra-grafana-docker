@@ -37,7 +37,7 @@ session = cluster.connect(keyspace)
 # Perform a sample query
 try:
     # Sample query to check keyspaces
-    rows = session.execute("SELECT * FROM interaction_data.interaction_data")
+    rows = session.execute("SELECT * FROM interaction_data.interaction_aggregates")
     for row in rows:
         print(row)
 except Exception as e:

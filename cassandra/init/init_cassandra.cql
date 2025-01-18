@@ -10,3 +10,19 @@ CREATE TABLE IF NOT EXISTS interaction_data.interaction_data (
     item_id DOUBLE,
     PRIMARY KEY (user_id, interaction_type, item_id, timestamp)
 );
+
+
+CREATE TABLE IF NOT EXISTS interaction_data.user_aggregates (
+    user_id TEXT PRIMARY KEY,
+    total_interactions INT,
+    average_interactions DOUBLE,
+    timestamp TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS interaction_data.item_aggregates (
+    item_id TEXT PRIMARY KEY,
+    max_interactions INT,
+    min_interactions INT,
+    total_interactions INT,
+    timestamp TIMESTAMP
+);

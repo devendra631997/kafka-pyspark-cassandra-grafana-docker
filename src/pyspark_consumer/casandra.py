@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
+from pyspark.sql.functions import from_json, col, expr
 from pyspark.sql.types import StructType, StringType, DoubleType, TimestampType
 import os
 import logging
@@ -85,21 +85,22 @@ def aggregate_item_interactions(df):
 
 
 # Function to write data to Cassandra
-def write_to_cassandra(df):
+def write_to_cassandra(df, keyspace=CASSANDRA_KEYSPACE, table=CASSANDRA_TABLE, mode: str = "append"):
     """Write processed data to Cassandra."""
     # Log the keyspace and table to check their values
-    logger.info(f"Writing to Cassandra: Keyspace={CASSANDRA_KEYSPACE}, Table={CASSANDRA_TABLE}")
-    
+    logger.info(f"Writing to Cassandra: Keyspace={keyspace}, Table={table}, Mode={mode}")
+
     # Ensure that the keyspace and table are passed explicitly in the options
-    query = df.writeStream \
-        .format("org.apache.spark.sql.cassandra") \
-        .option("keyspace", CASSANDRA_KEYSPACE) \
-        .option("table", CASSANDRA_TABLE) \
-        .outputMode("append") \
-        .start()
+    query = (df.writeStream
+             .format("org.apache.spark.sql.cassandra")
+             .option("keyspace", keyspace)
+             .option("table", table)
+             .outputMode(mode)  # Ensure mode is either "append" or "complete"
+             .start())
 
     logger.info("Writing stream to Cassandra...")
     return query
+
 
 # Main function to orchestrate the process
 def main():
@@ -107,8 +108,17 @@ def main():
     spark = create_spark_session()  # Step 1: Create Spark session
     df = read_from_kafka(spark)  # Step 2: Read from Kafka
     messages = parse_kafka_messages(df, schema)  # Step 3: Parse messages
-    query = write_to_cassandra(messages)  # Step 4: Write to Cassandra
-    
+    # user_agg_df = aggregate_user_interactions(messages)
+    # user_agg_df_query = write_to_cassandra(user_agg_df, table='user_aggregates', mode='complete')
+    # user_agg_df_query.awaitTermination()
+    # # Step 4: Aggregate item interactions
+    # item_agg_df = aggregate_item_interactions(messages)
+    # item_agg_df_query = write_to_cassandra(item_agg_df, table='item_aggregates', mode='complete')
+    # item_agg_df_query.awaitTermination()
+
+    # Write raw messages in append mode (since it's streaming data)
+    query = write_to_cassandra(messages, mode="append")
+
     # Handle graceful shutdown and errors
     try:
         logger.info("Starting query processing...")
@@ -119,6 +129,7 @@ def main():
     except Exception as e:
         logger.error(f"Error in streaming job: {e}")
         query.stop()
+
 
 if __name__ == "__main__":
     main()
