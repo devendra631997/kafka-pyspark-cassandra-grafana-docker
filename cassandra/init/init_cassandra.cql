@@ -21,8 +21,7 @@ CREATE TABLE IF NOT EXISTS interaction_data.user_aggregates (
 
 CREATE TABLE IF NOT EXISTS interaction_data.item_aggregates (
     item_id TEXT PRIMARY KEY,
-    max_interactions INT,
-    min_interactions INT,
     total_interactions INT,
+    average_interactions DOUBLE,
     timestamp TIMESTAMP
 );
