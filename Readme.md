@@ -195,3 +195,24 @@ If you encounter any issues, consider the following:
 --- 
 
 For further assistance or contributions, feel free to open an issue or submit a pull request.
+
+
+### Grafana
+
+#### Dashboard Configuration [config.json](grapfana_dashbord/Interaction-1737221935123.json).
+
+#### xychart for interaction data of user
+
+- ![xychart](grapfana_dashbord/interaction_data_of_user.png)
+
+
+#### piechart for item_aggregates
+
+- ![piechart](grapfana_dashbord/item_aggregates.png)
+
+
+#### barchart fro user_aggregates
+
+- ![barchart](grapfana_dashbord/user_aggregates.png)
+
+
