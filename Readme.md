@@ -1,4 +1,4 @@
-# Docker Compose Setup for Kafka, Cassandra, MongoDB, PySpark, and Grafana
+# Integration of Docker, Kafka, Cassandra, MongoDB, PySpark, and Grafana
 
 This repository provides a `docker-compose.yml` configuration to set up a multi-container environment for Kafka, Cassandra, MongoDB, PySpark, and Grafana. The setup is designed to provide a simple architecture to simulate message production, processing, and storage with monitoring capabilities.
 
